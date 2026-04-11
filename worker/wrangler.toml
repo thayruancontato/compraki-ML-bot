@@ -1,0 +1,7 @@
+name = "compraki-ml-bridge"
+main = "src/index.ts"
+compatibility_date = "2024-04-01"
+
+[vars]
+# ML_APP_ID e ML_SECRET_KEY serão configurados via Secret no Dashboard
+ML_SITE_ID = "MLB"

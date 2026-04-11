@@ -1,0 +1,9 @@
+node_modules
+dist
+dashboard/node_modules
+dashboard/dist
+.wwebjs_auth
+.git
+.env
+qrcode.html
+*.log

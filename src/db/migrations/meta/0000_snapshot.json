@@ -1,0 +1,256 @@
+{
+  "id": "39af9afe-0199-4dd5-99d5-470b6e2a2281",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.posts": {
+      "name": "posts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "produto_id": {
+          "name": "produto_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "texto_postado": {
+          "name": "texto_postado",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imagem_url": {
+          "name": "imagem_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pendente'"
+        },
+        "variante_ab": {
+          "name": "variante_ab",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grupo_whatsapp_id": {
+          "name": "grupo_whatsapp_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enviado_em": {
+          "name": "enviado_em",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "posts_produto_id_produtos_id_fk": {
+          "name": "posts_produto_id_produtos_id_fk",
+          "tableFrom": "posts",
+          "tableTo": "produtos",
+          "columnsFrom": [
+            "produto_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.produtos": {
+      "name": "produtos",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "titulo": {
+          "name": "titulo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imagem_url": {
+          "name": "imagem_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avaliacao_media": {
+          "name": "avaliacao_media",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avaliacao_count": {
+          "name": "avaliacao_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vendidos_count": {
+          "name": "vendidos_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preco_original": {
+          "name": "preco_original",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preco_promo": {
+          "name": "preco_promo",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formas_pagamento": {
+          "name": "formas_pagamento",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frete_info": {
+          "name": "frete_info",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frete_gratis": {
+          "name": "frete_gratis",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "atributos": {
+          "name": "atributos",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "estoque": {
+          "name": "estoque",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ml_item_id": {
+          "name": "ml_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ml_link_original": {
+          "name": "ml_link_original",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ml_link_afiliado": {
+          "name": "ml_link_afiliado",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "categoria": {
+          "name": "categoria",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'ativo'"
+        },
+        "ultima_visualizacao": {
+          "name": "ultima_visualizacao",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "produtos_ml_item_id_unique": {
+          "name": "produtos_ml_item_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "ml_item_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
