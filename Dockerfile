@@ -1,8 +1,10 @@
 # Usar imagem oficial do Node como base
-FROM node:20-slim
+FROM node:20@sha256:cb7cd4054831b77bb9a4c33007ec18c7b39a3f367e96a2135f603fa6f63ca9e2
 
 # Instalar dependências necessárias para o Chromium no Linux
 RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
     ca-certificates \
     fonts-liberation \
     libasound2 \
@@ -37,9 +39,15 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6 \
     lsb-release \
-    wget \
     xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+    --no-install-recommends
+
+# Instalar o Google Chrome Stable explicitamente
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list && \
+    apt-get update && \
+    apt-get install -y google-chrome-stable --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 # Definir diretório de trabalho
 WORKDIR /app
