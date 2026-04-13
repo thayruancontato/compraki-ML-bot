@@ -1,22 +1,28 @@
 import { Client, RemoteAuth, MessageMedia } from 'whatsapp-web.js';
 import { UpstashRedisStore } from './upstash-store';
 import * as fs from 'fs';
-import { exec } from 'child_process';
 import * as dotenv from 'dotenv';
 dotenv.config();
-
-/**
- * CONFIGURAÇÃO DE PERSISTÊNCIA NA NUVEM
- * Usamos RemoteAuth + Upstash Redis para que o login não seja perdido no Render.
- */
 
 const store = new UpstashRedisStore();
 let watchdogTimer: NodeJS.Timeout | null = null;
 
 export let whatsappClient: Client;
 
+function emitStatus(status: string, qr: string | null = null) {
+  (global as any).waStatus = status;
+  (global as any).waQRCode = qr;
+  
+  const io = (global as any).io;
+  if (io) {
+    io.emit('wa_status', { status, qr });
+    console.log(`[WhatsApp] Status emitido: ${status}`);
+  }
+}
+
 export function initializeWhatsApp() {
   console.log('[WhatsApp] Inicializando cliente...');
+  emitStatus('INICIALIZANDO');
   
   whatsappClient = new Client({
     authStrategy: new RemoteAuth({
@@ -33,40 +39,39 @@ export function initializeWhatsApp() {
   setupEventListeners();
   whatsappClient.initialize().catch(err => {
     console.error('[WhatsApp] Erro na inicialização fatal:', err);
+    emitStatus('ERRO FATAL');
   });
 }
 
 function setupEventListeners() {
   whatsappClient.on('qr', (qr) => {
     console.log('[WhatsApp] Novo QR Code gerado.');
-    (global as any).waStatus = 'AGUARDANDO QR';
-    (global as any).waQRCode = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+    emitStatus('AGUARDANDO QR', qrUrl);
     
-    // Inicia/Reinicia o watchdog sempre que um novo QR chega
     resetWatchdog();
   });
 
   whatsappClient.on('ready', () => {
     console.log('[WhatsApp] Cliente conectado e pronto!');
-    (global as any).waStatus = 'CONECTADO';
-    (global as any).waQRCode = null;
+    emitStatus('CONECTADO');
     stopWatchdog();
   });
 
   whatsappClient.on('authenticated', () => {
     console.log('[WhatsApp] Autenticado com sucesso.');
-    (global as any).waStatus = 'AUTENTICADO';
+    emitStatus('AUTENTICADO');
   });
 
   whatsappClient.on('auth_failure', () => {
     console.error('[WhatsApp] Falha na autenticação.');
-    (global as any).waStatus = 'ERRO DE SESSÃO';
-    restartWhatsApp(); // Tenta recuperar automaticamente
+    emitStatus('ERRO DE SESSÃO');
+    restartWhatsApp();
   });
 
   whatsappClient.on('disconnected', (reason) => {
     console.log('[WhatsApp] Cliente desconectado:', reason);
-    (global as any).waStatus = 'DESCONECTADO';
+    emitStatus('DESCONECTADO');
     restartWhatsApp();
   });
 
@@ -77,10 +82,9 @@ function setupEventListeners() {
 
 function resetWatchdog() {
   stopWatchdog();
-  // Se em 5 minutos não conectar depois de gerar o QR, reinicia o processo
   watchdogTimer = setTimeout(() => {
     if ((global as any).waStatus === 'AGUARDANDO QR') {
-      console.warn('[WhatsApp] Watchdog: QR Code expirou ou demorou demais. Reiniciando...');
+      console.warn('[WhatsApp] Watchdog: QR Code expirou. Reiniciando...');
       restartWhatsApp();
     }
   }, 300000); // 5 min
@@ -95,7 +99,7 @@ function stopWatchdog() {
 
 export async function restartWhatsApp() {
   console.log('[WhatsApp] Reiniciando serviço...');
-  (global as any).waStatus = 'REINICIANDO';
+  emitStatus('REINICIANDO');
   
   try {
     if (whatsappClient) {
@@ -110,7 +114,7 @@ export async function restartWhatsApp() {
 
 export async function sendGroupMessage(groupId: string, text: string, imageUrl?: string) {
   if ((global as any).waStatus !== 'CONECTADO') {
-     throw new Error('WhatsApp Bot ainda não está pronto ou conectado');
+     throw new Error('WhatsApp Bot ainda não está pronto');
   }
 
   try {
@@ -124,12 +128,8 @@ export async function sendGroupMessage(groupId: string, text: string, imageUrl?:
     } else {
       await whatsappClient.sendMessage(groupId, text);
     }
-    console.log(`Mensagem enviada com sucesso para ${groupId}`);
   } catch (error) {
     console.error('Erro ao enviar mensagem WhatsApp:', error);
     throw error;
   }
 }
-
-// Inicialização inicial
-initializeWhatsApp();
