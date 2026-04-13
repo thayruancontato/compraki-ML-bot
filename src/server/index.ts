@@ -17,12 +17,12 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Em produção, podemos restringir ao domínio do Cloudflare Pages
+    origin: "*", 
     methods: ["GET", "POST"]
   }
 });
 
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(compression());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../../dashboard/dist')));

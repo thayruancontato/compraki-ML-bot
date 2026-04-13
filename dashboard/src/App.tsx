@@ -12,8 +12,13 @@ interface Group {
   id: string;
 }
 
-// Conexão Socket.io (em produção a URL é relativa)
-const socket = io('/', {
+// CONFIGURAÇÃO DE URLS (HÍBRIDO: CLOUDFLARE + RENDER)
+const IS_PROD = true; // Forçamos produção para o deploy no Cloudflare
+const RENDER_URL = 'https://compraki-bot.onrender.com';
+const API_BASE = IS_PROD ? RENDER_URL : ''; 
+const SOCKET_URL = IS_PROD ? RENDER_URL : '/';
+
+const socket = io(SOCKET_URL, {
   transports: ['websocket'],
   autoConnect: true
 });
@@ -28,24 +33,21 @@ function App() {
   const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
-    // 1. Escuta atualizações de status via WebSocket (Instantâneo)
     socket.on('wa_status', (data: Status) => {
-      console.log('[Socket] Novo status recebido:', data);
+      console.log('[Socket] Status em tempo real:', data);
       setWaStatus(data);
     });
 
-    // 2. Busca dados iniciais de fila e grupos
     const fetchInitialData = async () => {
       try {
-        const queueRes = await fetch('/api/queue');
+        const queueRes = await fetch(`${API_BASE}/api/queue`);
         const queueData = await queueRes.json();
         setQueue(queueData.queue || []);
         
-        // Se já estiver conectado, busca os grupos
-        const statusRes = await fetch('/api/status');
+        const statusRes = await fetch(`${API_BASE}/api/status`);
         const statusData = await statusRes.json();
         if (statusData.status === 'CONECTADO') {
-            const groupsRes = await fetch('/api/groups');
+            const groupsRes = await fetch(`${API_BASE}/api/groups`);
             const groupsData = await groupsRes.json();
             setGroups(groupsData.groups || []);
         }
@@ -56,9 +58,8 @@ function App() {
 
     fetchInitialData();
 
-    // 3. Heartbeat (Keep-Alive): Pinga o servidor a cada 30 segundos para evitar sleep do Render
     const heartbeat = setInterval(() => {
-      fetch('/api/status').catch(() => {});
+      fetch(`${API_BASE}/api/status`).catch(() => {});
     }, 30000);
 
     return () => {
@@ -67,10 +68,9 @@ function App() {
     };
   }, []);
 
-  // Busca grupos quando o status muda para CONECTADO
   useEffect(() => {
     if (waStatus.status === 'CONECTADO' && groups.length === 0) {
-      fetch('/api/groups')
+      fetch(`${API_BASE}/api/groups`)
         .then(res => res.json())
         .then(data => setGroups(data.groups || []))
         .catch(err => console.error('Erro ao buscar grupos:', err));
@@ -81,14 +81,13 @@ function App() {
     if (!query || !selectedGroup) return alert('Preencha a busca e selecione um grupo');
     setLoading(true);
     try {
-      await fetch('/api/queue', {
+      await fetch(`${API_BASE}/api/queue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, groupId: selectedGroup })
       });
       setQuery('');
-      // Recarrega fila
-      const queueRes = await fetch('/api/queue');
+      const queueRes = await fetch(`${API_BASE}/api/queue`);
       const queueData = await queueRes.json();
       setQueue(queueData.queue || []);
       alert('Adicionado à fila!');
@@ -100,20 +99,17 @@ function App() {
   };
 
   const handleTestNow = async () => {
-    if (!selectedGroup) return alert('Selecione um grupo para o teste');
+    if (!selectedGroup) return alert('Selecione um grupo');
     setLoading(true);
     try {
-      const res = await fetch('/test-post', {
+      const res = await fetch(`${API_BASE}/test-post`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, groupId: selectedGroup })
       });
       const data = await res.json();
-      if (data.success) {
-        alert('Enviado com sucesso!');
-      } else {
-        alert('Erro: ' + (data.error || 'Nenhum produto encontrado'));
-      }
+      if (data.success) alert('Enviado com sucesso!');
+      else alert('Erro: ' + (data.error || 'Falha no envio'));
     } catch (err) {
       alert('Erro ao realizar postagem');
     } finally {
@@ -123,7 +119,7 @@ function App() {
 
   const handleRemoveFromQueue = async (index: number) => {
     try {
-      await fetch(`/api/queue/${index}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/api/queue/${index}`, { method: 'DELETE' });
       setQueue(prev => prev.filter((_, i) => i !== index));
     } catch (err) {
       alert('Erro ao remover da fila');
@@ -131,12 +127,12 @@ function App() {
   };
 
   const handleRestartBot = async () => {
-    if (!confirm('Deseja realmente reiniciar o bot?')) return;
+    if (!confirm('Deseja reiniciar a instância do bot?')) return;
     setRestarting(true);
     try {
-      await fetch('/api/whatsapp/restart', { method: 'POST' });
+      await fetch(`${API_BASE}/api/whatsapp/restart`, { method: 'POST' });
     } catch (err) {
-      alert('Erro ao solicitar reinício');
+      alert('Erro ao reiniciar');
     } finally {
       setRestarting(false);
     }
@@ -164,7 +160,7 @@ function App() {
           <div className="wa-status-container">
             {waStatus.qr ? (
               <div className="qr-container fade-in">
-                <p>Escaneie para conectar:</p>
+                <p>Escaneie o código abaixo:</p>
                 <img src={waStatus.qr} alt="QR Code" className="qr-image" />
               </div>
             ) : (
@@ -172,13 +168,13 @@ function App() {
                 {waStatus.status === 'CONECTADO' ? (
                   <div className="success-ui">
                     <div className="check-icon">✓</div>
-                    <p>Bot Online e Operacional</p>
+                    <p>Bot Cloud Conectado</p>
                   </div>
                 ) : (
                   <div className="loading-ui">
                     <div className="spinner"></div>
-                    <p>Sincronizando com a Nuvem...</p>
-                    <small>Se demorar, clique em reiniciar abaixo.</small>
+                    <p>Sincronizando Sessão...</p>
+                    <small>Dica: Abra o Dashboard e aguarde o robô carregar.</small>
                   </div>
                 )}
               </div>
@@ -189,7 +185,7 @@ function App() {
               onClick={handleRestartBot}
               disabled={restarting}
             >
-              {restarting ? 'Solicitando...' : '🔄 Reiniciar Instância'}
+              {restarting ? 'Reiniciando...' : '🔄 Reiniciar Bot'}
             </button>
           </div>
         </section>
@@ -199,7 +195,7 @@ function App() {
           <div className="form-group grid-layout">
             <input 
               type="text" 
-              placeholder="Produto (ex: Notebook)" 
+              placeholder="O que pesquisar no ML?" 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="glass-input"
@@ -209,7 +205,7 @@ function App() {
               onChange={(e) => setSelectedGroup(e.target.value)}
               className="glass-select"
             >
-              <option value="">Selecione o Grupo</option>
+              <option value="">Selecione o Grupo Destino</option>
               {groups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
@@ -222,7 +218,7 @@ function App() {
               onClick={handleAddToQueue}
               disabled={loading || waStatus.status !== 'CONECTADO'}
             >
-              {loading ? '...' : '➕ Agendar na Fila'}
+              ➕ Agendar
             </button>
 
             <button 
@@ -235,10 +231,10 @@ function App() {
           </div>
 
           <div className="queue-list">
-            <h3>Fila de Espera ({queue.length})</h3>
+            <h3>Fila de Ofertas ({queue.length})</h3>
             <div className="scroll-area">
               {queue.length === 0 ? (
-                <p className="empty-msg">Nenhuma postagem agendada.</p>
+                <p className="empty-msg">Sua fila de promoções está vazia.</p>
               ) : (
                 <ul>
                   {queue.map((item, idx) => {
