@@ -21,7 +21,7 @@ function emitStatus(status: string, qr: string | null = null) {
 }
 
 export function initializeWhatsApp() {
-  console.log('[WhatsApp] Inicializando cliente...');
+  console.log('[WhatsApp] Inicializando cliente em MODO LOW-RAM...');
   emitStatus('INICIALIZANDO');
   
   whatsappClient = new Client({
@@ -32,7 +32,21 @@ export function initializeWhatsApp() {
     }),
     puppeteer: {
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+      // FLAGS AGRESSIVAS PARA ECONOMIA DE MEMÓRIA (RENDER 512MB)
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process', // Roda tudo em um único processo (Economiza muita RAM)
+        '--disable-gpu',
+        '--disable-canvas-aa',
+        '--disable-2d-canvas-clip-aa',
+        '--disable-gl-drawing-for-tests',
+        '--js-flags="--max-old-space-size=256"' // Limita o heap do V8 para 256MB
+      ]
     }
   });
 
@@ -98,7 +112,7 @@ function stopWatchdog() {
 }
 
 export async function restartWhatsApp() {
-  console.log('[WhatsApp] Reiniciando serviço...');
+  console.log('[WhatsApp] Reiniciando serviço para liberar memória...');
   emitStatus('REINICIANDO');
   
   try {
