@@ -19,17 +19,26 @@ let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
 /**
- * GERA TOKEN DE ACESSO OFICIAL DO MERCADO LIVRE
+ * GERA TOKEN DE ACESSO OFICIAL DO MERCADO LIVRE (Com Stealth Headers)
  */
 async function getMLToken() {
   if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
 
   console.log('[ML API] Solicitando novo Access Token...');
   try {
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', ML_APP_ID);
+    params.append('client_secret', ML_SECRET_KEY);
+
     const resp = await fetch('https://api.mercadolibre.com/oauth/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=client_credentials&client_id=${ML_APP_ID}&client_secret=${ML_SECRET_KEY}`
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      body: params.toString()
     });
     
     const data: any = await resp.json();
@@ -38,7 +47,8 @@ async function getMLToken() {
       tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
       return cachedToken;
     }
-    throw new Error(data.message || 'Erro ao gerar token');
+    console.error('[ML API] Resposta OAuth:', JSON.stringify(data));
+    return null;
   } catch (err: any) {
     console.error('[ML API] Erro fatal no token:', err.message);
     return null;
@@ -47,42 +57,64 @@ async function getMLToken() {
 
 export async function getRandomProducts() {
   const query = DISCOVERY_TERMS[Math.floor(Math.random() * DISCOVERY_TERMS.length)];
-  return await searchProducts(query, 20);
+  return await searchProducts(query, 15);
 }
 
 export async function searchProducts(query: string, limit = 5) {
   console.log(`[ML API] Buscando: "${query}" (limite: ${limit})...`);
   
   const token = await getMLToken();
-  if (!token) return [];
+  
+  // Tenta busca via API Oficial primeiro (se tiver token)
+  if (token) {
+    try {
+      const resp = await fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
 
+      if (resp.ok) {
+        const data: any = await resp.json();
+        return (data.results || []).map(formatMLItem);
+      }
+      console.warn(`[ML API] API Oficial falhou (Status ${resp.status}). Tentando Fallback Público...`);
+    } catch (err) {
+      console.warn('[ML API] Erro na API Oficial, pulando para fallback.');
+    }
+  }
+
+  // FALLBACK: Busca via Frontend Público (Sem Token, mas com Stealth)
   try {
-    const url = `https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`;
-    const resp = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const publicUrl = `https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+    const resp = await fetch(publicUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
     });
 
-    if (!resp.ok) {
-      console.error(`[ML API] Erro HTTP ${resp.status}`);
-      return [];
-    }
-
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data: any = await resp.json();
-    const results = data.results || [];
-
-    return results.map((item: any) => ({
-      id: item.id,
-      title: item.title,
-      price: item.price,
-      original_price: item.original_price || item.price,
-      permalink: appendTrackingId(item.permalink),
-      thumbnail: item.thumbnail?.replace('http://', 'https://') || '',
-      free_shipping: item.shipping?.free_shipping || false
-    }));
+    return (data.results || []).map(formatMLItem);
   } catch (err: any) {
-    console.error('[ML API] Erro na busca:', err.message);
+    console.error('[ML API] Fallback também falhou:', err.message);
     return [];
   }
+}
+
+function formatMLItem(item: any) {
+  return {
+    id: item.id,
+    title: item.title,
+    price: item.price,
+    original_price: item.original_price || item.price,
+    permalink: appendTrackingId(item.permalink),
+    thumbnail: item.thumbnail?.replace('http://', 'https://') || '',
+    free_shipping: item.shipping?.free_shipping || false
+  };
 }
 
 function appendTrackingId(permalink: string): string {
