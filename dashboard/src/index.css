@@ -198,5 +198,109 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ===== PAIRING CODE UI ===== */
+.pairing-code-ui {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.pairing-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.pairing-code {
+  font-size: 2.8rem;
+  font-weight: 700;
+  letter-spacing: 8px;
+  background: linear-gradient(135deg, #818cf8, #38bdf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding: 1rem;
+  border: 2px dashed rgba(99, 102, 241, 0.3);
+  border-radius: 16px;
+  margin-bottom: 1.5rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.pairing-instructions {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.pairing-instructions strong {
+  color: var(--accent-secondary);
+}
+
+.pairing-input-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.section-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.8rem;
+}
+
+.pairing-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pairing-form .glass-input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+
+.btn-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.btn-accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.success-ui {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.check-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: white;
+  margin: 0 auto 1rem;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }

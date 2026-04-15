@@ -54,12 +54,30 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// API RESTART WHATSAPP
+// API RESTART WHATSAPP (aceita phoneNumber para pairing code)
 app.post('/api/whatsapp/restart', async (req, res) => {
   try {
-    console.log('[API] Reinício manual solicitado...');
-    await restartWhatsApp();
+    const { phoneNumber } = req.body || {};
+    console.log(`[API] Reinício solicitado${phoneNumber ? ` com pairing para ${phoneNumber}` : ''}...`);
+    await restartWhatsApp(phoneNumber);
     res.json({ success: true, message: 'Bot reiniciado' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API PAIRING CODE (conectar via número de telefone)
+app.post('/api/whatsapp/pair', async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) return res.status(400).json({ error: 'Número de telefone obrigatório' });
+    
+    // Limpa número: remove +, espaços, parênteses, traços
+    const cleanNumber = phoneNumber.replace(/[\s\-\(\)\+]/g, '');
+    console.log(`[API] Pairing code solicitado para: ${cleanNumber}`);
+    
+    await restartWhatsApp(cleanNumber);
+    res.json({ success: true, message: 'Código de pareamento solicitado' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

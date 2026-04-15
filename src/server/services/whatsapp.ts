@@ -13,14 +13,15 @@ let sock: any = null;
 let watchdogTimer: NodeJS.Timeout | null = null;
 
 // ===================== EMISSÃO DE STATUS EM TEMPO REAL =====================
-function emitStatus(status: string, qr: string | null = null) {
+function emitStatus(status: string, qr: string | null = null, pairingCode: string | null = null) {
   (global as any).waStatus = status;
   (global as any).waQRCode = qr;
+  (global as any).waPairingCode = pairingCode;
 
   const io = (global as any).io;
   if (io) {
-    io.emit('wa_status', { status, qr });
-    console.log(`[Baileys] Status: ${status}`);
+    io.emit('wa_status', { status, qr, pairingCode });
+    console.log(`[Baileys] Status: ${status}${pairingCode ? ` | Código: ${pairingCode}` : ''}`);
   }
 }
 
@@ -72,11 +73,10 @@ async function restoreSessionFromRedis() {
 }
 
 // ===================== INICIALIZAÇÃO PRINCIPAL =====================
-export async function initializeWhatsApp() {
-  console.log('[Baileys] Inicializando cliente ULTRA-RÁPIDO (sem browser)...');
+export async function initializeWhatsApp(phoneNumber?: string) {
+  console.log('[Baileys] Inicializando cliente (sem browser)...');
   emitStatus('INICIALIZANDO');
 
-  // Import dinâmico do Baileys (ESM)
   const baileys = await import('@whiskeysockets/baileys');
   const makeWASocket = baileys.default;
   const {
@@ -87,7 +87,7 @@ export async function initializeWhatsApp() {
     Browsers
   } = baileys;
   const pino = (await import('pino')).default;
-  const logger = pino({ level: 'warn' }); // warn para ver erros importantes
+  const logger = pino({ level: 'warn' });
 
   // 1. Restaurar sessão do Redis
   await restoreSessionFromRedis();
@@ -98,9 +98,9 @@ export async function initializeWhatsApp() {
   }
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`[Baileys] Usando WA v${version.join('.')} (latest: ${isLatest})`);
+  console.log(`[Baileys] WA v${version.join('.')} (latest: ${isLatest})`);
 
-  // 3. Criar socket com configurações otimizadas para servidor
+  // 3. Criar socket
   sock = makeWASocket({
     version,
     auth: {
@@ -109,27 +109,42 @@ export async function initializeWhatsApp() {
     },
     printQRInTerminal: false,
     logger,
-    browser: Browsers.ubuntu('Chrome'),  // Fingerprint oficial (mais confiável)
+    browser: Browsers.ubuntu('Chrome'),
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
-    markOnlineOnConnect: false,  // Não marca online ao conectar (reduz carga)
-    connectTimeoutMs: 60000,    // 60s de timeout de conexão
-    qrTimeout: 40000,           // 40s para cada QR antes de gerar novo
+    markOnlineOnConnect: false,
+    connectTimeoutMs: 60000,
   });
 
-  // 4. Evento de credenciais
+  // 4. Se temos um número de telefone E não estamos registrados, usar Pairing Code
+  if (phoneNumber && !sock.authState.creds.registered) {
+    try {
+      // Aguardar o socket estar pronto para solicitar o código
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const code = await sock.requestPairingCode(phoneNumber);
+      const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
+      console.log(`[Baileys] 🔑 CÓDIGO DE PAREAMENTO: ${formattedCode}`);
+      emitStatus('AGUARDANDO CÓDIGO', null, formattedCode);
+    } catch (err: any) {
+      console.error('[Baileys] Erro ao solicitar pairing code:', err.message);
+      // Fallback: continua com QR Code
+    }
+  }
+
+  // 5. Evento de credenciais
   sock.ev.on('creds.update', async () => {
     console.log('[Baileys] Credenciais atualizadas. Salvando...');
     await saveCreds();
     await saveSessionToRedis();
   });
 
-  // 5. Evento de conexão (com logging detalhado)
+  // 6. Evento de conexão
   sock.ev.on('connection.update', async (update: any) => {
-    const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
-    console.log('[Baileys] connection.update:', JSON.stringify({ connection, qr: !!qr, receivedPendingNotifications }));
+    const { connection, lastDisconnect, qr } = update;
+    console.log('[Baileys] connection.update:', JSON.stringify({ connection, qr: !!qr }));
 
-    if (qr) {
+    // Se estamos no modo Pairing Code, ignorar QR codes
+    if (qr && !phoneNumber) {
       console.log('[Baileys] QR Code gerado.');
       try {
         const qrDataUrl = await QRCode.toDataURL(qr, { width: 300, margin: 2 });
@@ -142,7 +157,6 @@ export async function initializeWhatsApp() {
     }
 
     if (connection === 'connecting') {
-      console.log('[Baileys] Estabelecendo conexão com WhatsApp...');
       emitStatus('CONECTANDO');
     }
 
@@ -152,7 +166,7 @@ export async function initializeWhatsApp() {
       console.log(`[Baileys] Conexão fechada. Status: ${statusCode}, Erro: ${errorMsg}`);
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log('[Baileys] Sessão invalidada. Limpando dados...');
+        console.log('[Baileys] Sessão invalidada. Limpando...');
         emitStatus('DESLOGADO');
         if (fs.existsSync(AUTH_DIR)) {
           fs.rmSync(AUTH_DIR, { recursive: true, force: true });
@@ -160,7 +174,6 @@ export async function initializeWhatsApp() {
         await redis.del(SESSION_KEY);
         setTimeout(() => initializeWhatsApp(), 5000);
       } else if (statusCode === 408 || statusCode === 503) {
-        console.log('[Baileys] Timeout/Indisponível. Aguardando 10s antes de reconectar...');
         emitStatus('RECONECTANDO');
         setTimeout(() => initializeWhatsApp(), 10000);
       } else {
@@ -197,7 +210,7 @@ function stopWatchdog() {
 }
 
 // ===================== REINICIAR =====================
-export async function restartWhatsApp() {
+export async function restartWhatsApp(phoneNumber?: string) {
   console.log('[Baileys] Reiniciando serviço...');
   emitStatus('REINICIANDO');
 
@@ -212,7 +225,7 @@ export async function restartWhatsApp() {
     console.warn('[Baileys] Erro ao fechar socket:', e);
   }
 
-  await initializeWhatsApp();
+  await initializeWhatsApp(phoneNumber);
 }
 
 // ===================== ENVIAR MENSAGEM =====================

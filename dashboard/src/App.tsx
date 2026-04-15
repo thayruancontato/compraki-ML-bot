@@ -5,6 +5,7 @@ import './App.css';
 interface Status {
   status: string;
   qr: string | null;
+  pairingCode: string | null;
 }
 
 interface Group {
@@ -12,10 +13,9 @@ interface Group {
   id: string;
 }
 
-// CONFIGURAÇÃO DE URLS (HÍBRIDO: CLOUDFLARE + RENDER)
-const IS_PROD = true; // Forçamos produção para o deploy no Cloudflare
+const IS_PROD = true;
 const RENDER_URL = 'https://compraki-bot.onrender.com';
-const API_BASE = IS_PROD ? RENDER_URL : ''; 
+const API_BASE = IS_PROD ? RENDER_URL : '';
 const SOCKET_URL = IS_PROD ? RENDER_URL : '/';
 
 const socket = io(SOCKET_URL, {
@@ -24,17 +24,19 @@ const socket = io(SOCKET_URL, {
 });
 
 function App() {
-  const [waStatus, setWaStatus] = useState<Status>({ status: 'INICIALIZANDO', qr: null });
+  const [waStatus, setWaStatus] = useState<Status>({ status: 'INICIALIZANDO', qr: null, pairingCode: null });
   const [groups, setGroups] = useState<Group[]>([]);
   const [queue, setQueue] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [loading, setLoading] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [pairing, setPairing] = useState(false);
 
   useEffect(() => {
     socket.on('wa_status', (data: Status) => {
-      console.log('[Socket] Status em tempo real:', data);
+      console.log('[Socket] Status:', data);
       setWaStatus(data);
     });
 
@@ -43,13 +45,13 @@ function App() {
         const queueRes = await fetch(`${API_BASE}/api/queue`);
         const queueData = await queueRes.json();
         setQueue(queueData.queue || []);
-        
+
         const statusRes = await fetch(`${API_BASE}/api/status`);
         const statusData = await statusRes.json();
         if (statusData.status === 'CONECTADO') {
-            const groupsRes = await fetch(`${API_BASE}/api/groups`);
-            const groupsData = await groupsRes.json();
-            setGroups(groupsData.groups || []);
+          const groupsRes = await fetch(`${API_BASE}/api/groups`);
+          const groupsData = await groupsRes.json();
+          setGroups(groupsData.groups || []);
         }
       } catch (err) {
         console.error('Erro ao buscar dados iniciais:', err);
@@ -76,6 +78,22 @@ function App() {
         .catch(err => console.error('Erro ao buscar grupos:', err));
     }
   }, [waStatus.status]);
+
+  const handlePairWithPhone = async () => {
+    if (!phoneNumber) return alert('Digite seu número com código do país (ex: 5511999998888)');
+    setPairing(true);
+    try {
+      await fetch(`${API_BASE}/api/whatsapp/pair`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber })
+      });
+    } catch (err) {
+      alert('Erro ao solicitar código');
+    } finally {
+      setPairing(false);
+    }
+  };
 
   const handleAddToQueue = async () => {
     if (!query || !selectedGroup) return alert('Preencha a busca e selecione um grupo');
@@ -109,7 +127,7 @@ function App() {
       });
       const data = await res.json();
       if (data.success) alert('Enviado com sucesso!');
-      else alert('Erro: ' + (data.error || 'Falha no envio'));
+      else alert('Erro: ' + (data.error || 'Falha'));
     } catch (err) {
       alert('Erro ao realizar postagem');
     } finally {
@@ -127,7 +145,7 @@ function App() {
   };
 
   const handleRestartBot = async () => {
-    if (!confirm('Deseja reiniciar a instância do bot?')) return;
+    if (!confirm('Reiniciar o bot?')) return;
     setRestarting(true);
     try {
       await fetch(`${API_BASE}/api/whatsapp/restart`, { method: 'POST' });
@@ -143,7 +161,7 @@ function App() {
       <header className="glass-header">
         <div className="logo-section">
           <div className="logo-icon">🛒</div>
-          <h1 className="gradient-text">Compraki Affiliate Bot</h1>
+          <h1 className="gradient-text">Compraki Bot</h1>
         </div>
         <div className={`status-badge ${waStatus.status === 'CONECTADO' ? 'online' : 'offline'}`}>
           <span className="dot"></span> {waStatus.status}
@@ -156,36 +174,62 @@ function App() {
             <h2>Conexão WhatsApp</h2>
             <div className="wa-status-label">{waStatus.status}</div>
           </div>
-          
+
           <div className="wa-status-container">
-            {waStatus.qr ? (
+            {waStatus.status === 'CONECTADO' ? (
+              <div className="success-ui fade-in">
+                <div className="check-icon">✓</div>
+                <p>Bot Cloud Conectado</p>
+              </div>
+            ) : waStatus.pairingCode ? (
+              <div className="pairing-code-ui fade-in">
+                <p className="pairing-label">Digite este código no WhatsApp:</p>
+                <div className="pairing-code">{waStatus.pairingCode}</div>
+                <p className="pairing-instructions">
+                  📱 No celular: <strong>Configurações → Aparelhos Conectados → Conectar Aparelho → Conectar com número de telefone</strong>
+                </p>
+              </div>
+            ) : waStatus.qr ? (
               <div className="qr-container fade-in">
-                <p>Escaneie o código abaixo:</p>
+                <p>Escaneie o código (ou use o método por número abaixo):</p>
                 <img src={waStatus.qr} alt="QR Code" className="qr-image" />
               </div>
             ) : (
-              <div className="connected-msg fade-in">
-                {waStatus.status === 'CONECTADO' ? (
-                  <div className="success-ui">
-                    <div className="check-icon">✓</div>
-                    <p>Bot Cloud Conectado</p>
-                  </div>
-                ) : (
-                  <div className="loading-ui">
-                    <div className="spinner"></div>
-                    <p>Sincronizando Sessão...</p>
-                    <small>Dica: Abra o Dashboard e aguarde o robô carregar.</small>
-                  </div>
-                )}
+              <div className="loading-ui fade-in">
+                <div className="spinner"></div>
+                <p>Sincronizando...</p>
               </div>
             )}
-            
-            <button 
-              className="btn btn-secondary restart-btn" 
+
+            {/* PAIRING CODE: Método de conexão via número (mais confiável na nuvem) */}
+            {waStatus.status !== 'CONECTADO' && !waStatus.pairingCode && (
+              <div className="pairing-input-section fade-in">
+                <p className="section-label">🔑 Conectar via Número (Recomendado)</p>
+                <div className="pairing-form">
+                  <input
+                    type="tel"
+                    placeholder="5511999998888"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="glass-input"
+                  />
+                  <button
+                    className="btn btn-accent"
+                    onClick={handlePairWithPhone}
+                    disabled={pairing}
+                  >
+                    {pairing ? '...' : '🔗 Gerar Código'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              className="btn btn-secondary restart-btn"
               onClick={handleRestartBot}
               disabled={restarting}
             >
-              {restarting ? 'Reiniciando...' : '🔄 Reiniciar Bot'}
+              {restarting ? 'Reiniciando...' : '🔄 Reiniciar'}
             </button>
           </div>
         </section>
@@ -193,40 +237,39 @@ function App() {
         <section className="glass-card queue-section">
           <h2>Agendar Nova Postagem</h2>
           <div className="form-group grid-layout">
-            <input 
-              type="text" 
-              placeholder="O que pesquisar no ML?" 
+            <input
+              type="text"
+              placeholder="O que pesquisar no ML?"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="glass-input"
             />
-            <select 
-              value={selectedGroup} 
+            <select
+              value={selectedGroup}
               onChange={(e) => setSelectedGroup(e.target.value)}
               className="glass-select"
             >
-              <option value="">Selecione o Grupo Destino</option>
+              <option value="">Selecione o Grupo</option>
               {groups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
           </div>
-          
+
           <div className="action-buttons">
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={handleAddToQueue}
               disabled={loading || waStatus.status !== 'CONECTADO'}
             >
               ➕ Agendar
             </button>
-
-            <button 
-              className="btn btn-test" 
+            <button
+              className="btn btn-test"
               onClick={handleTestNow}
               disabled={loading || waStatus.status !== 'CONECTADO'}
             >
-              🚀 Testar Agora
+              🚀 Testar
             </button>
           </div>
 
@@ -234,7 +277,7 @@ function App() {
             <h3>Fila de Ofertas ({queue.length})</h3>
             <div className="scroll-area">
               {queue.length === 0 ? (
-                <p className="empty-msg">Sua fila de promoções está vazia.</p>
+                <p className="empty-msg">Nenhuma oferta agendada.</p>
               ) : (
                 <ul>
                   {queue.map((item, idx) => {
