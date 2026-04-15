@@ -38,7 +38,8 @@ io.on('connection', (socket) => {
   // Envia status atual imediatamente ao conectar
   socket.emit('wa_status', {
     status: (global as any).waStatus || 'INICIALIZANDO',
-    qr: (global as any).waQRCode || null
+    qr: (global as any).waQRCode || null,
+    pairingCode: (global as any).waPairingCode || null
   });
 
   socket.on('disconnect', () => {
@@ -50,7 +51,8 @@ io.on('connection', (socket) => {
 app.get('/api/status', (req, res) => {
   res.json({
     status: (global as any).waStatus || 'INICIALIZANDO',
-    qr: (global as any).waQRCode || null
+    qr: (global as any).waQRCode || null,
+    pairingCode: (global as any).waPairingCode || null
   });
 });
 
