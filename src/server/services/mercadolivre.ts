@@ -1,3 +1,5 @@
+import * as cheerio from 'cheerio';
+
 const ML_APP_ID = process.env.ML_APP_ID || '';
 const ML_SECRET_KEY = process.env.ML_SECRET_KEY || '';
 const TRACKING_ID = process.env.ML_AFFILIATE_TRACKING_ID || '';
@@ -79,28 +81,56 @@ export async function searchProducts(query: string, limit = 5) {
         const data: any = await resp.json();
         return (data.results || []).map(formatMLItem);
       }
-      console.warn(`[ML API] API Oficial falhou (Status ${resp.status}). Tentando Fallback Público...`);
+      console.warn(`[ML API] API Oficial falhou (Status ${resp.status}). Tentando Fallback scraper...`);
     } catch (err) {
       console.warn('[ML API] Erro na API Oficial, pulando para fallback.');
     }
   }
 
-  // FALLBACK: Busca via Frontend Público (Sem Token, mas com Stealth)
+  // FALLBACK: Scratching HTML DOM Frontend Público
   try {
-    const publicUrl = `https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`;
-    const resp = await fetch(publicUrl, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+    const publicUrl = `https://lista.mercadolivre.com.br/${encodeURIComponent(query)}`;
+    const rs = await fetch(publicUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9'
+      }
+    });
+    
+    if (!rs.ok) throw new Error(`HTTP ${rs.status}`);
+    
+    const html = await rs.text();
+    const $ = cheerio.load(html);
+    
+    const items: any[] = [];
+    $('.poly-card').each((_, el) => {
+      if (items.length >= limit) return false; // break loop
+      
+      const titleEl = $(el).find('.poly-component__title');
+      const title = titleEl.text();
+      const link = titleEl.attr('href') || $(el).find('a').attr('href');
+      
+      const currentPriceText = $(el).find('.poly-price__current .andes-money-amount__fraction').first().text();
+      const oldPriceText = $(el).find('.poly-price__strike .andes-money-amount__fraction').first().text();
+      let thumb = $(el).find('img').attr('data-src') || $(el).find('img').attr('src');
+      
+      if (title && currentPriceText) {
+        items.push({ 
+           id: link?.split('/')[3] || String(Date.now()), // Mock ID for frontend
+           title: title, 
+           price: parseFloat(currentPriceText.replace(/\./g, '')),
+           original_price: oldPriceText ? parseFloat(oldPriceText.replace(/\./g, '')) : parseFloat(currentPriceText.replace(/\./g, '')),
+           permalink: appendTrackingId(link || ''), 
+           thumbnail: thumb?.replace('I.jpg', 'O.jpg') || '',
+           free_shipping: $(el).text().toLowerCase().includes('frete grátis')
+        });
       }
     });
 
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data: any = await resp.json();
-    return (data.results || []).map(formatMLItem);
+    console.log(`[ML API] Fallback HTML extraiu ${items.length} itens.`);
+    return items;
   } catch (err: any) {
-    console.error('[ML API] Fallback também falhou:', err.message);
+    console.error('[ML API] Fallback HTML também falhou:', err.message);
     return [];
   }
 }
