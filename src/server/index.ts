@@ -5,7 +5,7 @@ import cors from 'cors';
 import compression from 'compression';
 import * as dotenv from 'dotenv';
 import cron from 'node-cron';
-import { whatsappClient, sendGroupMessage, restartWhatsApp, initializeWhatsApp } from './services/whatsapp';
+import { sendGroupMessage, restartWhatsApp, initializeWhatsApp, getGroups } from './services/whatsapp';
 import { searchProducts } from './services/mercadolivre';
 import { buildWhatsAppPost } from './services/post-builder';
 import { redis } from './services/redis';
@@ -17,7 +17,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", 
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
@@ -29,12 +29,12 @@ app.use(express.static(path.join(__dirname, '../../dashboard/dist')));
 
 const PORT = process.env.PORT || 3000;
 
-// Middleware para disponibilizar o socket io para os serviços (via eventos)
+// Disponibilizar io globalmente para o serviço de WhatsApp
 (global as any).io = io;
 
 io.on('connection', (socket) => {
-  console.log('[Socket] Novo cliente conectado:', socket.id);
-  
+  console.log('[Socket] Cliente conectado:', socket.id);
+
   // Envia status atual imediatamente ao conectar
   socket.emit('wa_status', {
     status: (global as any).waStatus || 'INICIALIZANDO',
@@ -46,7 +46,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// API STATUS (Mantida para compatibilidade/fallback)
+// API STATUS (fallback para heartbeat)
 app.get('/api/status', (req, res) => {
   res.json({
     status: (global as any).waStatus || 'INICIALIZANDO',
@@ -57,26 +57,25 @@ app.get('/api/status', (req, res) => {
 // API RESTART WHATSAPP
 app.post('/api/whatsapp/restart', async (req, res) => {
   try {
-    console.log('[API] Solicitado reinício manual do WhatsApp...');
+    console.log('[API] Reinício manual solicitado...');
     await restartWhatsApp();
-    res.json({ success: true, message: 'Bot reiniciado com sucesso' });
+    res.json({ success: true, message: 'Bot reiniciado' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// API GRUPOS
+// API GRUPOS (agora via Baileys)
 app.get('/api/groups', async (req, res) => {
   try {
-    const chats = await whatsappClient.getChats();
-    const groups = chats.filter(c => c.isGroup).map(g => ({ name: g.name, id: g.id._serialized }));
+    const groups = await getGroups();
     res.json({ groups });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Outras rotas (Queue, Test Post, etc.) permanecem iguais...
+// FILA DE OFERTAS
 app.get('/api/queue', async (req, res) => {
   try {
     const queue = await redis.lrange('ML_OFERTAS_QUEUE', 0, -1);
@@ -110,6 +109,7 @@ app.delete('/api/queue/:index', async (req, res) => {
   }
 });
 
+// POSTAR OFERTA MANUALMENTE
 app.post('/test-post', async (req, res) => {
   const { query, groupId } = req.body;
   if (!groupId) return res.status(400).json({ error: 'groupId faltando' });
@@ -125,8 +125,8 @@ app.post('/test-post', async (req, res) => {
   }
 });
 
+// CRON JOB: POSTAR OFERTAS A CADA 30 MINUTOS
 cron.schedule('*/30 * * * *', async () => {
-  // Lógica do cron permanece igual...
   try {
     const item = await redis.lpop<string>('ML_OFERTAS_QUEUE');
     if (!item) return;
@@ -141,11 +141,12 @@ cron.schedule('*/30 * * * *', async () => {
   }
 });
 
+// SPA FALLBACK
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../../dashboard/dist', 'index.html'));
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Servidor rodando em modo Real-Time na porta ${PORT}`);
-  initializeWhatsApp(); // Garante que o WA inicialize DEPOIS do server estar pronto
+  console.log(`🚀 Servidor Compraki rodando na porta ${PORT} (Motor: Baileys)`);
+  initializeWhatsApp();
 });
