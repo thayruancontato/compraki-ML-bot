@@ -18,9 +18,13 @@ export default {
 			if (!query) return new Response('Missing q', { status: 400 });
 
 			try {
-				// TESTANDO SEM TOKEN (BUSCA PÚBLICA)
+				// BUSCA AUTENTICADA (MAIS ESTÁVEL)
+				const token = await getMLToken(env);
 				const resp = await fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`, {
-					headers: commonHeaders
+					headers: { 
+						...commonHeaders,
+						'Authorization': `Bearer ${token}`
+					}
 				});
 				
 				const status = resp.status;
@@ -30,10 +34,16 @@ export default {
 					worker_status: status,
 					ml_response: data
 				}), {
-					headers: { 'Content-Type': 'application/json' }
+					headers: { 
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*' 
+					}
 				});
 			} catch (err: any) {
-				return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+				return new Response(JSON.stringify({ error: err.message }), { 
+					status: 500,
+					headers: { 'Access-Control-Allow-Origin': '*' }
+				});
 			}
 		}
 
@@ -57,7 +67,32 @@ export default {
 			}
 		}
 
-		return new Response('Compraki Bridge Active', { status: 200 });
+		if (url.pathname === '/scrape') {
+			const query = url.searchParams.get('q');
+			if (!query) return new Response('Missing q', { status: 400 });
+
+			try {
+				const publicUrl = `https://lista.mercadolivre.com.br/${encodeURIComponent(query)}`;
+				const rs = await fetch(publicUrl, {
+					headers: {
+						'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+						'Accept-Language': 'pt-BR,pt;q=0.9',
+						'Accept': 'text/html'
+					}
+				});
+				const html = await rs.text();
+				return new Response(html, {
+					headers: { 
+						'Content-Type': 'text/html',
+						'Access-Control-Allow-Origin': '*'
+					}
+				});
+			} catch (err: any) {
+				return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+			}
+		}
+
+		return new Response('Compraki Bridge Active v3', { status: 200 });
 	},
 };
 

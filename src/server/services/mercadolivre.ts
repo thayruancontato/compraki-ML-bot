@@ -1,4 +1,6 @@
 import * as cheerio from 'cheerio';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const ML_APP_ID = process.env.ML_APP_ID || '';
 const ML_SECRET_KEY = process.env.ML_SECRET_KEY || '';
@@ -128,9 +130,37 @@ export async function searchProducts(query: string, limit = 5) {
     });
 
     console.log(`[ML API] Fallback HTML extraiu ${items.length} itens.`);
+    if (items.length === 0) throw new Error('Nenhum item extraido (possivel captcha)');
     return items;
   } catch (err: any) {
     console.error('[ML API] Fallback HTML também falhou:', err.message);
+    return await getLocalFallbackProducts(limit);
+  }
+}
+
+async function getLocalFallbackProducts(limit: number) {
+  try {
+    const fallbackPath = path.join(__dirname, '../fallback_products.json');
+    const data = await fs.promises.readFile(fallbackPath, 'utf8');
+    const products = JSON.parse(data);
+    
+    // Pick random items to simulate discovery
+    const shuffled = products.sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, limit);
+    
+    console.log(`[ML API] Usando ${selected.length} produtos da Curadoria Local!`);
+    
+    return selected.map((item: any, i: number) => ({
+      id: `CACHE_${Date.now()}_${i}`,
+      title: item.title,
+      price: parseFloat(item.price.replace('R$ ', '').replace('.', '').replace(',', '.')),
+      original_price: parseFloat(item.price.replace('R$ ', '').replace('.', '').replace(',', '.')),
+      permalink: appendTrackingId(item.link),
+      thumbnail: item.thumbnail,
+      free_shipping: true
+    }));
+  } catch (e: any) {
+    console.error('[ML API] Cache local também falhou:', e.message);
     return [];
   }
 }
