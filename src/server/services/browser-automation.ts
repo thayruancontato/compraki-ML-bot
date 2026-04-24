@@ -7,6 +7,8 @@ export interface Product {
   id: string;
   title: string;
   price: string;
+  originalPrice?: string;
+  discount?: string;
   thumbnail: string;
   permalink: string;
   commission: string;
@@ -386,12 +388,18 @@ export class BrowserAutomationService extends EventEmitter {
                         document.querySelector('h1.ui-pdp-title') ||
                         document.querySelector('h1');
         
-        // Preço: Busca o valor principal (andes-money-amount é o padrão atual do ML)
-        // Tentamos primeiro o preço em destaque (Buy Box ou principal)
-        const priceEl = document.querySelector('.ui-pdp-buybox .andes-money-amount') ||
+        // Preço Atual: Busca o valor principal em destaque
+        const priceEl = document.querySelector('.ui-pdp-price__second-line .andes-money-amount') ||
                         document.querySelector('.ui-pdp-price .andes-money-amount') ||
-                        document.querySelector('.ui-pdp-price__second-line .andes-money-amount') ||
                         document.querySelector('.andes-money-amount');
+
+        // Preço Antigo (se houver promoção)
+        const originalPriceEl = document.querySelector('.andes-money-amount--previous') ||
+                                document.querySelector('.ui-pdp-price__old .andes-money-amount');
+        
+        // Desconto (ex: 30% OFF)
+        const discountEl = document.querySelector('.ui-pdp-price__discount') ||
+                           document.querySelector('.andes-money-amount__discount');
 
         // Imagem: Busca imagem de zoom ou imagem principal da galeria
         const zoomImg = document.querySelector('img[data-zoom]') as HTMLImageElement;
@@ -411,6 +419,8 @@ export class BrowserAutomationService extends EventEmitter {
         return {
           title: titleEl ? (titleEl as HTMLElement).innerText.trim() : null,
           price: priceEl ? (priceEl as HTMLElement).innerText.replace(/\n/g, ' ').trim() : null,
+          originalPrice: originalPriceEl ? (originalPriceEl as HTMLElement).innerText.replace(/\n/g, ' ').trim() : null,
+          discount: discountEl ? (discountEl as HTMLElement).innerText.trim() : null,
           thumbnail: imgSrc
         };
       });
@@ -421,13 +431,19 @@ export class BrowserAutomationService extends EventEmitter {
         return null;
       }
 
-      // Limpeza básica do preço
-      if (details.price) {
-        // Remove textos extras como "reais", "centavos" que o innerText pode trazer
-        details.price = details.price.replace(/\s+/g, ' ');
-      } else {
-        details.price = 'R$ 0,00';
-      }
+      // Limpeza básica dos preços
+      const cleanPrice = (p: string | null) => p ? p.replace(/\s+/g, ' ').trim() : null;
+      
+      const res: Product = {
+        id: Buffer.from(details.title).toString('base64').substring(0, 16),
+        title: details.title,
+        price: cleanPrice(details.price) || 'R$ 0,00',
+        originalPrice: cleanPrice(details.originalPrice) || undefined,
+        discount: details.discount || undefined,
+        thumbnail: toHighRes(details.thumbnail),
+        permalink: url,
+        commission: '0%'
+      };
 
       // 2. Clicar no botão azul "Compartilhar" na barra de afiliados
       const shareBtnPos = await this.page!.evaluate(() => {
@@ -503,12 +519,14 @@ export class BrowserAutomationService extends EventEmitter {
       }
 
       return {
-        id: Buffer.from(details.title).toString('base64').substring(0, 16),
-        title: details.title,
-        price: details.price,
+        id: Buffer.from(details.title || '').toString('base64').substring(0, 16),
+        title: details.title || 'Produto sem título',
+        price: details.price || 'R$ 0,00',
+        originalPrice: details.originalPrice || undefined,
+        discount: details.discount || undefined,
         thumbnail: toHighRes(details.thumbnail),
         permalink: affiliateLink || url,
-        commission: ''
+        commission: '0%'
       };
     } catch (err) {
       console.error('[Browser Error] Erro em getProductByUrl:', err);

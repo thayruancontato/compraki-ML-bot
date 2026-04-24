@@ -1,24 +1,28 @@
 import { generateAffiliateLink } from './affiliate';
 
 export function buildWhatsAppPost(product: any, variant: 'A' | 'B' = 'A') {
-  const isDiscounted = product.original_price && product.price && product.original_price > product.price;
   const affiliateLink = generateAffiliateLink(product.permalink);
-  
   // Se o preço já for string (ex: R$ 50,00), usamos direto. Se não, formatamos.
   const formatPrice = (val: any) => {
+    if (!val) return '';
     if (typeof val === 'string') return val;
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  // Se vier do robô de automação, os campos serão 'price', 'originalPrice' e 'discount'
+  const hasPromo = !!product.originalPrice;
+  const currentPrice = formatPrice(product.price);
+  const oldPrice = formatPrice(product.originalPrice);
+  const discountText = product.discount || '';
+
   let msg = `🔥 *OFERTA IMPERDÍVEL* 🔥\n\n`;
   msg += `*${product.title?.trim() || 'Produto'}*\n\n`;
 
-  if (isDiscounted) {
-    const discount = Math.round((1 - (product.price / product.original_price)) * 100);
-    msg += `❌ De: ~${formatPrice(product.original_price)}~\n`;
-    msg += `💲 *Por apenas: ${formatPrice(product.price)}* (${discount}% OFF!)\n\n`;
+  if (hasPromo) {
+    msg += `❌ De: ~${oldPrice}~\n`;
+    msg += `💲 *Por apenas: ${currentPrice}* ${discountText ? `(${discountText})` : ''}\n\n`;
   } else {
-    msg += `💲 *Preço: ${formatPrice(product.price)}*\n\n`;
+    msg += `💲 *Preço: ${currentPrice}*\n\n`;
   }
 
   if (product.free_shipping) {
