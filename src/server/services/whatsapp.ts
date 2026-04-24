@@ -2,95 +2,49 @@ import { Boom } from '@hapi/boom';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as QRCode from 'qrcode';
-import { redis } from './redis';
+import { BrowserWindow } from 'electron';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const AUTH_DIR = path.join(process.cwd(), 'baileys_auth');
-const SESSION_KEY = 'BAILEYS_SESSION';
+const AUTH_DIR = path.join(appDataPath(), 'baileys_auth');
+
+function appDataPath() {
+  // Pega o caminho de AppData de forma segura para Electron
+  return process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Preferences' : process.env.HOME + "/.local/share");
+}
 
 let sock: any = null;
 let watchdogTimer: NodeJS.Timeout | null = null;
+let mainWindow: BrowserWindow | null = null;
+
+export function setMainWindow(window: BrowserWindow) {
+  mainWindow = window;
+}
 
 // ===================== EMISSÃO DE STATUS EM TEMPO REAL =====================
 function emitStatus(status: string, qr: string | null = null, pairingCode: string | null = null) {
   (global as any).waStatus = status;
-  // Só atualiza QR e Pairing se eles não forem nulos, ou se o status for especificamente de limpeza
   if (qr !== null) (global as any).waQRCode = qr;
   if (pairingCode !== null) (global as any).waPairingCode = pairingCode;
   
-  // Limpa códigos em casos de conexão ou erro fatal para evitar confusão
   if (status === 'CONECTADO' || status === 'DESLOGADO' || status === 'ERRO FATAL') {
     (global as any).waQRCode = null;
     (global as any).waPairingCode = null;
   }
 
-  const io = (global as any).io;
-  if (io) {
-    io.emit('wa_status', { 
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('wa-status', { 
       status, 
       qr: (global as any).waQRCode, 
       pairingCode: (global as any).waPairingCode 
     });
-    console.log(`[Baileys] Status: ${status}${pairingCode ? ` | Código: ${pairingCode}` : ''}`);
   }
-}
-
-// ===================== PERSISTÊNCIA VIA REDIS =====================
-async function saveSessionToRedis() {
-  try {
-    if (!fs.existsSync(AUTH_DIR)) return;
-
-    const files = fs.readdirSync(AUTH_DIR);
-    const sessionData: Record<string, string> = {};
-
-    for (const file of files) {
-      const filePath = path.join(AUTH_DIR, file);
-      const stat = fs.statSync(filePath);
-      if (stat.isFile() && stat.size < 5_000_000) {
-        sessionData[file] = fs.readFileSync(filePath, 'utf-8');
-      }
-    }
-
-    await redis.set(SESSION_KEY, JSON.stringify(sessionData));
-    console.log(`[Baileys] Sessão salva no Redis (${Object.keys(sessionData).length} arquivos)`);
-  } catch (err) {
-    console.error('[Baileys] Erro ao salvar sessão:', err);
-  }
-}
-
-async function restoreSessionFromRedis() {
-  try {
-    const rawData = await redis.get<any>(SESSION_KEY);
-    if (!rawData) {
-      console.log('[Baileys] Nenhuma sessão no Redis. Login novo necessário.');
-      return;
-    }
-
-    let sessionData: Record<string, string>;
-    if (typeof rawData === 'object' && rawData !== null) {
-      sessionData = rawData;
-    } else {
-      sessionData = JSON.parse(rawData);
-    }
-
-    if (!fs.existsSync(AUTH_DIR)) {
-      fs.mkdirSync(AUTH_DIR, { recursive: true });
-    }
-
-    for (const [file, content] of Object.entries(sessionData)) {
-      fs.writeFileSync(path.join(AUTH_DIR, file), content, 'utf-8');
-    }
-
-    console.log(`[Baileys] Sessão restaurada do Redis (${Object.keys(sessionData).length} arquivos)`);
-  } catch (err) {
-    console.error('[Baileys] Erro ao restaurar sessão:', err);
-  }
+  console.log(`[Baileys] Status: ${status}${pairingCode ? ` | Código: ${pairingCode}` : ''}`);
 }
 
 // ===================== INICIALIZAÇÃO PRINCIPAL =====================
 export async function initializeWhatsApp(phoneNumber?: string) {
-  console.log('[Baileys] Inicializando cliente (sem browser)...');
+  console.log('[Baileys] Inicializando cliente Desktop...');
   emitStatus('INICIALIZANDO');
 
   const baileys = await import('@whiskeysockets/baileys');
@@ -105,18 +59,14 @@ export async function initializeWhatsApp(phoneNumber?: string) {
   const pino = (await import('pino')).default;
   const logger = pino({ level: 'warn' });
 
-  // 1. Restaurar sessão do Redis
-  await restoreSessionFromRedis();
-
-  // 2. Carregar estado de autenticação
   if (!fs.existsSync(AUTH_DIR)) {
     fs.mkdirSync(AUTH_DIR, { recursive: true });
   }
+
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version, isLatest } = await fetchLatestBaileysVersion();
   console.log(`[Baileys] WA v${version.join('.')} (latest: ${isLatest})`);
 
-  // 3. Criar socket
   sock = makeWASocket({
     version,
     auth: {
@@ -132,10 +82,8 @@ export async function initializeWhatsApp(phoneNumber?: string) {
     connectTimeoutMs: 60000,
   });
 
-  // 4. Se temos um número de telefone E não estamos registrados, usar Pairing Code
   if (phoneNumber && !sock.authState.creds.registered) {
     try {
-      // Aguardar o socket estar totalmente pronto e estabilizado
       await new Promise(resolve => setTimeout(resolve, 5000));
       console.log(`[Baileys] Solicitando código de pareamento para ${phoneNumber}...`);
       const code = await sock.requestPairingCode(phoneNumber);
@@ -144,23 +92,17 @@ export async function initializeWhatsApp(phoneNumber?: string) {
       emitStatus('AGUARDANDO CÓDIGO', null, formattedCode);
     } catch (err: any) {
       console.error('[Baileys] Erro ao solicitar pairing code:', err.message);
-      // Fallback: continua com QR Code se falhar feio
     }
   }
 
-  // 5. Evento de credenciais
   sock.ev.on('creds.update', async () => {
-    console.log('[Baileys] Credenciais atualizadas. Salvando...');
     await saveCreds();
-    await saveSessionToRedis();
   });
 
-  // 6. Evento de conexão
   sock.ev.on('connection.update', async (update: any) => {
     const { connection, lastDisconnect, qr } = update;
     console.log('[Baileys] connection.update:', JSON.stringify({ connection, qr: !!qr }));
 
-    // Se estamos no modo Pairing Code, ignoramos a emissão de QR para não sobrescrever o status na UI
     if (qr && !phoneNumber) {
       console.log('[Baileys] QR Code gerado.');
       try {
@@ -188,7 +130,6 @@ export async function initializeWhatsApp(phoneNumber?: string) {
         if (fs.existsSync(AUTH_DIR)) {
           fs.rmSync(AUTH_DIR, { recursive: true, force: true });
         }
-        await redis.del(SESSION_KEY);
         setTimeout(() => initializeWhatsApp(), 5000);
       } else if (statusCode === 408 || statusCode === 503) {
         emitStatus('RECONECTANDO');
@@ -203,12 +144,10 @@ export async function initializeWhatsApp(phoneNumber?: string) {
       console.log('[Baileys] ✅ CONECTADO COM SUCESSO!');
       emitStatus('CONECTADO');
       stopWatchdog();
-      await saveSessionToRedis();
     }
   });
 }
 
-// ===================== WATCHDOG =====================
 function resetWatchdog() {
   stopWatchdog();
   watchdogTimer = setTimeout(() => {
@@ -226,7 +165,6 @@ function stopWatchdog() {
   }
 }
 
-// ===================== REINICIAR =====================
 export async function restartWhatsApp(phoneNumber?: string) {
   console.log('[Baileys] Reiniciando serviço...');
   emitStatus('REINICIANDO');
@@ -245,8 +183,7 @@ export async function restartWhatsApp(phoneNumber?: string) {
   await initializeWhatsApp(phoneNumber);
 }
 
-// ===================== ENVIAR MENSAGEM =====================
-export async function sendGroupMessage(groupId: string, text: string, imageUrl?: string) {
+export async function sendGroupMessage(groupId: string, text: string, imageBufferOrUrl?: Buffer | string) {
   if (!sock || (global as any).waStatus !== 'CONECTADO') {
     throw new Error('WhatsApp Bot ainda não está pronto');
   }
@@ -254,12 +191,15 @@ export async function sendGroupMessage(groupId: string, text: string, imageUrl?:
   try {
     const jid = groupId.includes('@') ? groupId : `${groupId}@g.us`;
 
-    if (imageUrl) {
+    if (imageBufferOrUrl) {
       try {
-        await sock.sendMessage(jid, {
-          image: { url: imageUrl },
-          caption: text
-        });
+        let imageMsg;
+        if (Buffer.isBuffer(imageBufferOrUrl)) {
+           imageMsg = { image: imageBufferOrUrl, caption: text };
+        } else {
+           imageMsg = { image: { url: imageBufferOrUrl }, caption: text };
+        }
+        await sock.sendMessage(jid, imageMsg);
       } catch {
         await sock.sendMessage(jid, { text });
       }
@@ -272,7 +212,6 @@ export async function sendGroupMessage(groupId: string, text: string, imageUrl?:
   }
 }
 
-// ===================== LISTAR GRUPOS =====================
 export async function getGroups(): Promise<{ name: string; id: string }[]> {
   if (!sock || (global as any).waStatus !== 'CONECTADO') {
     return [];

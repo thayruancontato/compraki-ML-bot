@@ -2,14 +2,14 @@
   "name": "compraki-affiliate-bot",
   "version": "1.0.0",
   "description": "WhatsApp Bot for Mercado Livre Affiliates",
-  "main": "src/server/index.ts",
+  "main": "dist/electron/main.js",
   "scripts": {
-    "dev": "tsx watch src/server/index.ts",
-    "start": "node dist/server/index.js",
-    "build": "npm run build:all",
+    "dev:dashboard": "cd dashboard && npm run dev",
+    "dev:electron": "tsc && wait-on http://localhost:5173 && electron .",
+    "dev": "concurrently \"npm run dev:dashboard\" \"npm run dev:electron\"",
     "build:dashboard": "cd dashboard && npm install && npm run build",
-    "build:all": "cd dashboard && npm install && npm run build && tsc",
-
+    "build:electron": "tsc",
+    "build": "npm run build:dashboard && npm run build:electron && electron-builder",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
   },
@@ -18,27 +18,27 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1029.0",
-    "@neondatabase/serverless": "^1.0.2",
-    "@upstash/redis": "^1.37.0",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "adm-zip": "^0.5.17",
+    "better-sqlite3": "^12.9.0",
     "cheerio": "^1.2.0",
-    "compression": "^1.8.1",
-    "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "drizzle-orm": "^0.45.2",
-    "express": "^5.2.1",
     "https-proxy-agent": "^9.0.0",
+    "link-preview-js": "^3.2.0",
     "node-cron": "^4.2.1",
     "pino": "^10.3.1",
+    "puppeteer": "^24.41.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
+    "sharp": "^0.34.5",
     "wwebjs-aws-s3": "^1.0.2"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -48,8 +48,30 @@
     "@types/qrcode": "^1.5.6",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/socket.io": "^3.0.1",
+    "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.10",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "wait-on": "^9.0.5"
+  },
+  "build": {
+    "appId": "com.compraki.app",
+    "productName": "Compraki Ofertas",
+    "icon": "icone-exe.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dashboard/dist/**/*",
+      "extensao-compraki/**/*",
+      "icone-exe.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icone-exe.png"
+    }
   }
 }

@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Compraki Afiliados - WhatsApp Direto",
+  "version": "2.0",
+  "description": "Envia promoções direto para grupos do WhatsApp via aba aberta do WhatsApp Web.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.mercadolivre.com.br/*",
+    "https://*.mlstatic.com/*",
+    "https://web.whatsapp.com/*",
+    "https://*.trycloudflare.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Compraki Ofertas"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.mercadolivre.com.br/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ]
+}

@@ -1,0 +1,242 @@
+#compraki-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 340px;
+  background-color: #121214;
+  color: #e1e1e6;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  font-family: 'Inter', Arial, sans-serif;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #323238;
+  animation: compraki-slide-in 0.3s ease-out;
+}
+
+@keyframes compraki-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#compraki-overlay * {
+  box-sizing: border-box;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.compraki-header {
+  background: #202024;
+  padding: 12px 16px;
+  border-bottom: 1px solid #323238;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.compraki-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #04d361;
+}
+
+.compraki-close-btn {
+  background: transparent;
+  border: none;
+  color: #a8a8b3;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  line-height: 1;
+}
+
+.compraki-close-btn:hover {
+  color: #f75a68;
+}
+
+.compraki-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.compraki-state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.compraki-state.active {
+  display: flex;
+}
+
+/* Spinner */
+.compraki-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #323238;
+  border-top-color: #04d361;
+  border-radius: 50%;
+  animation: compraki-spin 0.8s linear infinite;
+}
+
+@keyframes compraki-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Badge de status */
+.compraki-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #04d361;
+  background: rgba(4, 211, 97, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(4, 211, 97, 0.2);
+}
+
+.compraki-dot {
+  width: 6px;
+  height: 6px;
+  background: #04d361;
+  border-radius: 50%;
+  animation: compraki-pulse 2s ease-in-out infinite;
+}
+
+@keyframes compraki-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Select */
+.compraki-select {
+  width: 100%;
+  padding: 10px;
+  background: #202024;
+  border: 1px solid #323238;
+  color: #e1e1e6;
+  border-radius: 6px;
+  outline: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.compraki-select:focus {
+  border-color: #04d361;
+}
+
+/* Botão principal */
+.compraki-btn {
+  width: 100%;
+  padding: 12px;
+  background: #04d361;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.compraki-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.compraki-btn:active {
+  transform: translateY(0);
+}
+
+.compraki-btn:disabled {
+  background: #323238;
+  color: #a8a8b3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Preview do produto */
+.compraki-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #202024;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: left;
+  border: 1px solid #323238;
+  width: 100%;
+}
+
+.compraki-preview img {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: white;
+  flex-shrink: 0;
+}
+
+.compraki-preview div {
+  flex: 1;
+  overflow: hidden;
+}
+
+.compraki-preview p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compraki-preview span {
+  font-size: 14px;
+  color: #04d361;
+  font-weight: bold;
+}
+
+/* Tracking ID */
+.compraki-tracking {
+  font-size: 11px;
+  color: #a8a8b3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  width: 100%;
+}
+
+.compraki-tracking input {
+  background: #202024;
+  border: 1px solid #323238;
+  color: #e1e1e6;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.compraki-tracking input:focus {
+  border-color: #04d361;
+}

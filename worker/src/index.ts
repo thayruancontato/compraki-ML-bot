@@ -92,7 +92,45 @@ export default {
 			}
 		}
 
-		return new Response('Compraki Bridge Active v3', { status: 200 });
+		if (url.pathname === '/shorten') {
+			const longUrl = url.searchParams.get('url');
+			if (!longUrl) return new Response('Missing url', { status: 400, headers: {'Access-Control-Allow-Origin': '*'} });
+			try {
+				const res = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`);
+				const data: any = await res.json();
+				return new Response(JSON.stringify({ shorturl: data.shorturl || longUrl }), {
+					headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+				});
+			} catch (err: any) {
+				return new Response(JSON.stringify({ error: err.message, shorturl: longUrl }), { 
+					headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+				});
+			}
+		}
+
+		if (url.pathname === '/proxy-image') {
+			const imgUrl = url.searchParams.get('url');
+			if (!imgUrl) return new Response('Missing url', { status: 400, headers: {'Access-Control-Allow-Origin': '*'} });
+			try {
+				const res = await fetch(imgUrl, {
+					headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36' }
+				});
+				const buffer = await res.arrayBuffer();
+				return new Response(buffer, {
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+						'Content-Type': res.headers.get('Content-Type') || 'image/jpeg',
+						'Cache-Control': 'public, max-age=86400'
+					}
+				});
+			} catch (err: any) {
+				return new Response(JSON.stringify({ error: err.message }), { 
+					status: 500, headers: { 'Access-Control-Allow-Origin': '*' } 
+				});
+			}
+		}
+
+		return new Response('Compraki Bridge Active v5', { status: 200, headers: {'Access-Control-Allow-Origin': '*'} });
 	},
 };
 

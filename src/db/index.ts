@@ -1,13 +1,14 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
-import * as dotenv from 'dotenv';
+import * as path from 'path';
 
-dotenv.config();
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is missing in .env');
+function appDataPath() {
+  return process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Preferences' : process.env.HOME + "/.local/share");
 }
 
-const sql = neon(process.env.DATABASE_URL);
-export const db = drizzle(sql, { schema });
+// Cria banco de dados na pasta do app
+const dbPath = path.join(appDataPath(), 'compraki.db');
+const sqlite = new Database(dbPath);
+
+export const db = drizzle(sqlite, { schema });

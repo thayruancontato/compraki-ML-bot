@@ -7,3 +7,13 @@ dashboard/dist
 qrcode.html
 *.log
 .DS_Store
+.ml_session
+baileys_auth
+release
+.wwebjs_cache
+*.html
+*.webp
+*.png
+!icone-exe.png
+scratch/
+whatsapp-server/

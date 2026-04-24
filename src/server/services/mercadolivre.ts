@@ -80,24 +80,7 @@ export async function getRandomProducts(category?: string) {
 export async function searchProducts(query: string, limit = 5) {
   console.log(`[ML API] Buscando: "${query}" (limite: ${limit})...`);
 
-  // CAMADA 1: Cloudflare Worker como proxy de scraping (IPs do Worker não são bloqueados)
-  try {
-    const workerUrl = `${CF_WORKER_URL}/scrape?q=${encodeURIComponent(query)}`;
-    console.log('[ML API] Tentando via Cloudflare Worker:', workerUrl);
-    const rs = await fetch(workerUrl);
-    if (!rs.ok) throw new Error(`Worker HTTP ${rs.status}`);
-    const html = await rs.text();
-    const items = parseMLHtml(html, limit);
-    if (items && items.length > 0) {
-      console.log(`[ML API] Worker Scrape extraiu ${items.length} itens!`);
-      return items;
-    }
-    throw new Error('Worker retornou HTML sem produtos (captcha/bloqueio)');
-  } catch (err: any) {
-    console.warn('[ML API] Camada 1 (Worker) falhou:', err.message);
-  }
-
-  // CAMADA 2: Scraping direto (pode ser bloqueado no Render)
+  // CAMADA 1: Scraping direto (Local)
   try {
     const publicUrl = `https://lista.mercadolivre.com.br/${encodeURIComponent(query)}`;
     const rs = await fetch(publicUrl, {
@@ -110,12 +93,12 @@ export async function searchProducts(query: string, limit = 5) {
     const html = await rs.text();
     const items = parseMLHtml(html, limit);
     if (items && items.length > 0) {
-      console.log(`[ML API] Scrape direto extraiu ${items.length} itens.`);
+      console.log(`[ML API] Scrape local extraiu ${items.length} itens.`);
       return items;
     }
-    throw new Error('Scrape direto retornou lista vazia (captcha/bloqueio)');
+    throw new Error('Scrape local retornou lista vazia (captcha/bloqueio)');
   } catch (err: any) {
-    console.warn('[ML API] Camada 2 (Direto) falhou:', err.message);
+    console.warn('[ML API] Camada 1 (Scrape Local) falhou:', err.message);
   }
 
   // Se as duas camadas de scraping falharem, retornamos lista vazia (conforme pedido: sem dados mock)
